@@ -1,0 +1,91 @@
+#!/bin/bash
+#Copyright (C) 2026 WrapEarnPass
+#Creative work licensed under CC BY-NC-SA 4.0
+
+#policytool bash library
+set +x
+_POLICYTOOL_LIB=1
+_HOST=$(hostname)
+_DIR=".generated"
+_RUN=".run"
+echo ""| grep -E '^' &>/dev/null && echo ""| grep -P '^' &>/dev/null
+_GREP=$?
+echo "1.2 + 2.3" | bc &>/dev/null
+_BC=$?
+which checkmodule &>/dev/null
+_CHKMOD=$?
+which semodule_package &>/dev/null
+_SEMODPKG=$?
+which semodule &>/dev/null
+_SEMOD=$?
+which cmp &>/dev/null
+_CMP=$?
+which audit2allow &>/dev/null
+_ATOA=$?
+which journalctl &>/dev/null
+_JCRTL=$?
+
+
+_WHO=$(whoami)
+
+#dep check
+if [ "$_GREP" -gt "0" ] ; then
+	echo "grep doesn't know -E and -P"
+	exit 2
+fi
+if [ "$_BC" -gt "0" ] ; then
+	echo "bc can't math"
+	exit 3
+fi
+if [ "$_CMP" -gt "0" ] ; then
+	echo "cmp doesnt count"
+	exit 4
+fi
+if [ "$_CHKMOD" -gt "0" ] ; then
+	echo "checkmodule not found"
+	exit 5
+fi
+if [ "$_SEMODPKG" -gt "0" ] ; then
+	echo "semodule_package not found"
+	exit 6
+fi
+if [ "$_WHO" == "root" ] ; then
+	if [ "$_SEMOD" -gt "0" ] ; then
+		echo "semodule not found"
+		exit 7
+	fi
+else
+	echo "not running as root, semodule will not be invoked."
+fi
+if [ "$_ATOA" -gt "0" ] ; then
+	echo "audit2allow not found"
+	exit 8
+fi
+if [ "$_JCRTL" -gt "0" ] ; then
+	echo "journalctl not found"
+	exit 9
+fi
+
+
+
+#initialize dir
+mkdir "$_DIR" &> /dev/null
+
+#initialize run
+if [ ! -f "$_RUN" ] ; then
+	echo 0 > "$_RUN"
+	touch -d '@0' "$_RUN"
+fi
+#ensure that source file doesnt mix and match source types.
+function sanity-test () {
+	_allow="$1"
+	#test the allows to ensure they are specific to the file type
+	#i.e. that staff_t.allow doesnt insert allow user_t gobbledygook.
+	_file_name="$(basename "$_allow")"
+	_source_type="${_file_name%.*}"
+	_count=$(grep -cv "allow $_source_type" $_allow)
+	if [ "$_count" -gt "0" ] ; then
+		echo "$_allow contains an allow for the wrong source type"
+		exit 10
+	fi
+}
