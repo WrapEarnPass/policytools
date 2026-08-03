@@ -42,5 +42,6 @@ function uniq-allows (){
 	done
 
 	#then mv _TMP back to _allow
-	mv "$_TMP" "$_allow"
+	sort -u "$_TMP" > "$_allow"
+	rm "$_TMP"
 }
