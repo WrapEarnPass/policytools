@@ -1,6 +1,7 @@
 #!/bin/bash
 #Copyright (C) 2026 WrapEarnPass
 #Creative work licensed under CC BY-NC-SA 4.0
+
 if [ -z ${_POLICYTOOL_LIB} ]; then
 	. policytool.bash.lib
 fi
@@ -38,5 +39,7 @@ function explode-allows (){
 		done;
 	done
 	#mv tmp to explode
-	mv "$_TMP" "$_allow".explode
+	sort -u "$_TMP" > "$_allow".explode
+	#cleanup $_TMP
+	rm "$_TMP"
 }

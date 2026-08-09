@@ -1,6 +1,7 @@
 #!/bin/bash
 #Copyright (C) 2026 WrapEarnPass
 #Creative work licensed under CC BY-NC-SA 4.0
+
 #init libraries
 if [ -z ${_POLICYTOOL_LIB} ]; then
 	. policytool.bash.lib
@@ -9,7 +10,7 @@ fi
 #argument processing
 if [ -n "$1" ] ; then
 	#given any argument assume help
-cat << EOF 
+cat << EOF
 .run                                timestamp of last run
 ./disallows                         regex file of permissions to deny automatically
                                     disallow uses grep -E formatting for regex
@@ -17,7 +18,7 @@ cat << EOF
 $_DIR/                              all policytool internal records
 $_DIR/<SOURCE_TYPE_T>.allow         deduped allows to be written to .te files
 $_DIR/<SOURCE_TYPE_T>.explode       used to compare allows to disallows
-$_DIR/<SOURCE_TYPE_T>.prev          used to compare new perms to old
+$_DIR/<SOURCE_TYPE_T>.prev          used to compare staged permissions to existing
 $_DIR/<hostname>_<SOURCE_TYPE>.ver  type enforcement version record
 $_DIR/<hostname>_<SOURCE_TYPE>.te   type enforcement file generated
 $_DIR/<hostname>_<SOURCE_TYPE>.mod  policy module file generated
@@ -112,7 +113,7 @@ while IFS=' }:{;' read _nil _source_read _target_type _class _perm; do
 		_skip_allow=0
 		continue
 	fi
-	if [ -n "$_nil" ] && [ "$_nil" == "allow" ]; then 
+	if [ -n "$_nil" ] && [ "$_nil" == "allow" ]; then
 		#we have a new actual permission
 		if [[ $_perm == *"};" ]]; then
 			#close the permission
@@ -127,81 +128,31 @@ while IFS=' }:{;' read _nil _source_read _target_type _class _perm; do
 	fi
 done < audit.log
 
-#cleanup new allows
-#this cannot be done in "new allows" or "overrides" because
-#it must be done for both
+#disallow handling
+#ensure new allows are tested against disallows
 _allows=$(find "$_DIR" -type f -name '*.allow' -newer "$_RUN" )
-for _allow in $_allows ; do 
-	#create explodes for global disallow processing	
+for _allow in $_allows ; do
+	#create explodes for global disallow processing
 	explode-allows "$_allow"
 	#remove global disallows from each source_user
-	_TMP=$(mktemp)
-	grep -vEf ./disallows "${_allow}.explode" > "$_TMP"
-	#if there are any clean allows
-	_counter=$(wc --total=only -l "$_TMP" )
-	[ -f "${_allow}.prev" ] && cmp -s "${_allow}.prev" "$_TMP" 
-	_cmp=$?
-	if [ "$_counter" -gt "0" ] && [ "$_cmp" -eq "1" ]; then
-		#mv cleaned allows back
-		mv "$_TMP" "${_allow}"
-		#stash the explode so we can test next time
-		cp "${_allow}" "${_allow}.prev"
-		#ensure overrides will be added
-		touch -c $(basename ${_allow})
-	else
-		rm "$_TMP"
-		#have to sort-uniq here, as we wont process this file later
-		uniq-allows "$_allow"
-		#slag the .allow so that it doesnt get processed
-		touch -r "$_RUN" "${_allow}"
-	fi
-	#no need to sort-uniq here, as we will be doing it later
+	grep -vEf ./disallows "${_allow}.explode" 2>/dev/null > "$_allow"
 done
-
 #if disallows has been edited, go back and remove the new disallows from existing perms
 if [ -f "./disallows" ] && [ "./disallows" -nt "$_RUN" ] ; then
 	_allows=$(find "$_DIR" -type f -name '*.allow')
-	for _allow in $_allows ; do 
-		#create explodes for global disallow processing	
+	for _allow in $_allows ; do
+		#create explodes for global disallow processing
 		echo "applying disallows on $_allow"
 		explode-allows "$_allow"
 		#remove global disallows from each source_user
-		_TMP=$(mktemp)
-		grep -vEf ./disallows "${_allow}.explode" 2>/dev/null > "$_TMP"
-		#if there are any clean allows
-		_counter=$(wc --total=only -l "$_TMP" )
-		if [ "$_counter" -gt "0" ]; then
-			#mv cleaned allows back
-			#echo "allows"
-			mv "$_TMP" "${_allow}"
-			#ensure overrides will be added
-			touch -c $(basename ${_allow})
-		else
-			rm "$_TMP"
-			rm "${_allow}"
-			
-			#if there is an override, that has to be refreshed
-			if [ -f "$(basename ${_allow})" ] ; then
-				touch -c $(basename ${_allow})
-			else #there are no permissions at all, purge
-				_source_name="$(basename "$_allow")"
-				_source_name=${_source_name::-8}
-				rm "$_DIR/${_HOST}_${_source_name}".te "$_DIR/${_HOST}_${_source_name}".mod "$_DIR/${_HOST}_${_source_name}".pp  "$_DIR/${_HOST}_${_source_name}".ver "${_allow}".explode &> /dev/null
-				if [ "$_WHO" == "root" ] ; then
-					semodule -l | grep -c "${_HOST}_${_source_name}" &> /dev/null  && semodule -r "${_HOST}_${_source_name}"
-				else
-					echo "get ROOT to semodule -r \"${_HOST}_${_source_name}\""
-				fi
-			fi
-		fi
-		#no need to sort-uniq here, as we will be doing it later
+		grep -vEf ./disallows "${_allow}.explode" 2>/dev/null > "$_allow"
 	done
 fi
 
 
 #overrides
 #this can't be done in new allows because an override may
-#be created independently of an audit
+#be created independently of a new allow
 _allows=$(find . -maxdepth 1 -type f -name '*.allow' -newer "$_RUN" )
 for _allow in $_allows ; do
 	echo "overriding $_allow"
@@ -210,7 +161,73 @@ for _allow in $_allows ; do
 	uniq-allows "$_allow"
 	#add new overrides to allows
 	cat $_allow >> "$_DIR/$_allow"
+	#uniq/sort the allow for easier reviewing
+	uniq-allows "$_DIR/$_allow"
 done
+#add overrides to any newly generated allows too.
+_allows=$(find "$_DIR" -maxdepth 1 -type f -name '*.allow' -newer "$_RUN" )
+for _allow in $_allows ; do
+	_override=$(basename ${_allow})
+	if [ -f "$_override" ] ; then
+		echo "overriding $_allow"
+		#add new overrides to allows
+		cat $_override >> "$_allow"
+		#uniq/sort the allow for easier reviewing
+		uniq-allows "$_allow"
+	fi
+done
+
+
+#stash and compare .prev
+#now we have all the changes, see if they are actually changes.
+_allows=$(find "$_DIR" -maxdepth 1 -type f -name '*.allow' -newer "$_RUN" )
+for _allow in $_allows ; do
+        if [ -e "$_allow" ] && [ ! -s "$_allow" ]; then
+                #nothing permitted
+		rm "$_allow" "$_allow".prev "$_allow".explode &> /dev/null
+                continue
+        fi
+        #sort-uniq the allows
+        uniq-allows "$_allow"
+	if [ -f "$_allow".prev ] ; then
+		cmp -s "$_allow" "$_allow".prev
+		_cmp=$?
+		if [ "$_cmp" -eq "0" ] ; then
+			#slag the allows to prevent processing
+			touch -r "$_RUN" "$_allow"
+		fi
+	fi
+	#stash the changes
+	cp "$_allow" "$_allow".prev
+
+done
+
+
+#cleanup forbidden modules
+#remove any modules that used to exist, but now do not.
+_typeenforce=$(find "$_DIR" -maxdepth 1 -type f -name '*.te')
+for _source_file in $_typeenforce ; do
+	#_source_file should be <machinename>_<typename without _t>.te
+	_allow="$(basename "$_source_file")"
+	_allow=${_allow#"${_HOST}_"}
+	_allow=${_allow%".te"}
+	_allow="$_DIR/${_allow}_t.allow"
+	if [ ! -f $_allow ] ; then
+		echo -n "About to remove module $_source_file"
+		read _wait_until
+
+		#there are no permissions at all, purge
+		_source_name=${_source_file%".te"}
+		rm "${_source_name}".te "${_source_name}".mod "${_source_name}".pp  "${_source_name}".ver "${_allow}".explode "${_allow}".prev &> /dev/null
+		_source_name="$(basename ${_source_name})"
+		if [ "$_WHO" == "root" ] ; then
+			semodule -l | grep -c "${_source_name}" &> /dev/null  && semodule -r "${_source_name}"
+		else
+			echo "get ROOT to semodule -r \"${_source_name}\""
+		fi
+	fi
+done
+
 
 #build .te files from generated allows
 #we only want to generate files who were changed in this session
@@ -220,10 +237,9 @@ _FAILBOAT=0
 for _allow in $_allows ; do
 	if [ -e "$_allow" ] && [ ! -s "$_allow" ]; then
 		#nothing permitted
+		rm "$_allow" "$_allow".prev "$_allow".explode &> /dev/null
 		continue
 	fi
-	#sort-uniq the allows
-	uniq-allows "$_allow"
 	_source_name="$(basename "$_allow")"
 	_source_name=${_source_name::-8}
 
@@ -262,7 +278,7 @@ if [ "$_WHO" == "root" ] && [ -n "$_new" ]; then
 		semodule -v -D -i $_new
 	fi
 	if [ "$?" -gt "0" ]; then
-    echo "Unable to load semodules."
+		echo "Unable to load semodules."
 		exit 128
 	fi
 
