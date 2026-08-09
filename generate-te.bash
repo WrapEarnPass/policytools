@@ -19,17 +19,17 @@ function generate-te () {
 	declare -A _PERMS
 	while IFS=' }:{;' read _nil _source_type _target_type _class _perm; do
 		if [ -n "$_source_type" ]; then
-		_TYPES[${_source_type}]=""
-		_TYPES[${_target_type}]=""
-		_CLASSES[${_class}]=${_CLASSES[${_class}]}" "$_perm
-		_address=${_target_type}:${_class}
-		_PERMS[${_address}]=${_PERMS[${_address}]}" "$_perm
+			_TYPES[${_source_type}]=""
+			_TYPES[${_target_type}]=""
+			_CLASSES[${_class}]=${_CLASSES[${_class}]}" "$_perm
+			_address=${_target_type}:${_class}
+			_PERMS[${_address}]=${_PERMS[${_address}]}" "$_perm
 		fi
 	done < "$_allow"
-	
+
 	#self is a reserved type, don't declare it
 	unset _TYPES["self"]
-	
+
 	#now _PERM should have all the perms required for each s-t-c, but
 	# the perms themselves may be duperatededed.
 	declare -A _permlist
@@ -45,7 +45,7 @@ function generate-te () {
 			_PERMS[${_item}]=${_PERMS[${_item}]}" "$_cleaned
 		done;
 	done
-	
+
 	# also cleanup _CLASSES
 	declare -A _permlist
 	for item in ${!_CLASSES[@]} ; do
@@ -60,7 +60,7 @@ function generate-te () {
 			_CLASSES[${item}]=${_CLASSES[${item}]}" "$_cleaned
 		done;
 	done
-		
+
 	#initialize .ver
 	if [ ! -f "$_DIR/${_source_name}.ver" ] ; then
 		echo 0 >  "$_DIR/${_source_name}.ver"

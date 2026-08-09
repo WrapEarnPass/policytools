@@ -33,16 +33,16 @@ fi
 _header_sleep=0
 #sanitycheck the disallows
 if [ ! -f "./disallows" ]; then
-        echo "WARNING: No disallows, everything will be approved."
-        _header_sleep=1
+	echo "WARNING: No disallows, everything will be approved."
+	_header_sleep=1
 elif [ "$(grep -cP '^$' ./disallows)" -gt "0"  ]; then
         echo "ERROR: disallows contains a blank line."
         exit 121
 fi
 #check the dontaudit
 if [ -f "./disable_dontaudit" ]; then
-        echo "WARNING: semodule to be invoked with -D"
-        _header_sleep=1
+	echo "WARNING: semodule to be invoked with -D"
+	_header_sleep=1
 	_disable_dontaudit=1
 fi
 
@@ -183,13 +183,13 @@ done
 #now we have all the changes, see if they are actually changes.
 _allows=$(find "$_DIR" -maxdepth 1 -type f -name '*.allow' -newer "$_RUN" )
 for _allow in $_allows ; do
-        if [ -e "$_allow" ] && [ ! -s "$_allow" ]; then
+	if [ -e "$_allow" ] && [ ! -s "$_allow" ]; then
 		#nothing permitted
 		rm "$_allow" "$_allow".prev "$_allow".explode &> /dev/null
 		continue
-        fi
-        #sort-uniq the allows
-        uniq-allows "$_allow"
+	fi
+	#sort-uniq the allows
+	uniq-allows "$_allow"
 	if [ -f "$_allow".prev ] ; then
 		cmp -s "$_allow" "$_allow".prev
 		_cmp=$?
