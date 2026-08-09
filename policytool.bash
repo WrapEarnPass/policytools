@@ -128,6 +128,7 @@ while IFS=' }:{;' read _nil _source_read _target_type _class _perm; do
 	fi
 done < audit.log
 
+
 #disallow handling
 #ensure new allows are tested against disallows
 _allows=$(find "$_DIR" -type f -name '*.allow' -newer "$_RUN" )
@@ -183,9 +184,9 @@ done
 _allows=$(find "$_DIR" -maxdepth 1 -type f -name '*.allow' -newer "$_RUN" )
 for _allow in $_allows ; do
         if [ -e "$_allow" ] && [ ! -s "$_allow" ]; then
-                #nothing permitted
+		#nothing permitted
 		rm "$_allow" "$_allow".prev "$_allow".explode &> /dev/null
-                continue
+		continue
         fi
         #sort-uniq the allows
         uniq-allows "$_allow"
@@ -230,7 +231,7 @@ done
 
 
 #build .te files from generated allows
-#we only want to generate files who were changed in this session
+#we only want to generate files which were changed in this session
 _allows=$(find "$_DIR" -maxdepth 1 -type f -name '*.allow' -newer "$_RUN" )
 _new=""
 _FAILBOAT=0
