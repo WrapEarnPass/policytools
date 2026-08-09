@@ -27,7 +27,7 @@ $_DIR/<hostname>_<SOURCE_TYPE>.pp   policy package file generated
                                     delete the file to disable
 Once policy packages are compiled, they are loaded and audit.log is truncated
 EOF
-exit 0
+	exit 0
 fi
 
 _header_sleep=0
@@ -36,8 +36,8 @@ if [ ! -f "./disallows" ]; then
 	echo "WARNING: No disallows, everything will be approved."
 	_header_sleep=1
 elif [ "$(grep -cP '^$' ./disallows)" -gt "0"  ]; then
-        echo "ERROR: disallows contains a blank line."
-        exit 121
+	echo "ERROR: disallows contains a blank line."
+	exit 121
 fi
 #check the dontaudit
 if [ -f "./disable_dontaudit" ]; then
